@@ -363,7 +363,7 @@ TEST(DoubleMove, CannotDoubleWhileMustPass) {
   EXPECT_FALSE(b.apply(Action::move({6, 6})));
 }
 
-// 19. Ko from first stone blocks second stone at ko point
+// 19. Ko from first stone doesn't block second stone at ko point
 TEST(DoubleMove, KoFromFirstStoneDoesNotBlockSecond) {
   Board b(9);
   // Setup ko pattern, then use double move to trigger it
@@ -469,4 +469,35 @@ TEST(DoubleMove, NormalLegalActionsIncludeAllTypes) {
 
   // Count: 1 Pass + 81 Move + 81 DoubleFirst = 163 on empty 9x9
   EXPECT_EQ(actions.size(), 163u);
+}
+
+// 24. Taking a ko on the second move correctly sets the ko point, and
+// the forced pass resets the ko.
+
+TEST(DoubleMove, SecondMoveKo) {
+  Board b(9);
+
+  // Setup ko pattern, then use second double move to trigger it
+  // Standard ko setup:
+  //   col:  0  1  2  3
+  // row 0:  .  B  W  .
+  // row 1:  B  W  .  W
+  // row 2:  .  B  W  .
+  b.play({0, 1}); // B
+  b.play({0, 2}); // W
+  b.play({1, 0}); // B
+  b.play({1, 3}); // W
+  b.play({2, 1}); // B
+  b.play({2, 2}); // W
+  b.play({8, 8}); // B elsewhere
+  b.play({1, 1}); // W
+
+  b.apply(Action::double_first({7, 7}));
+  b.apply(Action::double_second({1, 2})); // B take ko
+
+  EXPECT_FALSE(b.play({1, 1})); // W can't retake
+  EXPECT_TRUE(b.play({6, 6}));  // W play away
+  EXPECT_TRUE(b.must_pass());   // B must pass
+  b.pass();
+  EXPECT_TRUE(b.play({1, 1}));
 }
