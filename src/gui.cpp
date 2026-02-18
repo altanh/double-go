@@ -4,6 +4,7 @@
 #include <algorithm>
 #include <cmath>
 #include <cstdint>
+#include <cstdio>
 #include <cstring>
 #include <optional>
 #include <string>
@@ -272,7 +273,7 @@ static void draw_circle_outline(SDL_Renderer *renderer, int cx, int cy, int r) {
 
 static constexpr int BOARD_SIZE = 9;
 static constexpr int MARGIN = 40;
-static constexpr int STATUS_HEIGHT = 60;
+static constexpr int STATUS_HEIGHT = 80;
 static constexpr int CELL_SIZE = 68;
 static constexpr int BOARD_PX = CELL_SIZE * (BOARD_SIZE - 1);
 static constexpr int WIN_W = BOARD_PX + 2 * MARGIN;
@@ -315,9 +316,17 @@ static constexpr int HOSHI_9_COUNT = 5;
 
 // ── Rendering ───────────────────────────────────────────────────────────────
 
+static std::string format_score(double v) {
+  if (v == static_cast<int>(v))
+    return std::to_string(static_cast<int>(v));
+  char buf[16];
+  std::snprintf(buf, sizeof(buf), "%.1f", v);
+  return buf;
+}
+
 static void render_board(SDL_Renderer *renderer, const double_go::Board &board,
                          std::optional<double_go::Point> last_move,
-                         std::optional<double_go::Point> hover) {
+                         std::optional<double_go::Point> hover, double komi) {
   // Background
   SDL_SetRenderDrawColor(renderer, BG_COLOR.r, BG_COLOR.g, BG_COLOR.b, 255);
   SDL_Rect board_rect{0, 0, WIN_W, WIN_H - STATUS_HEIGHT};
@@ -391,8 +400,9 @@ static void render_board(SDL_Renderer *renderer, const double_go::Board &board,
   }
 
   // Hover preview (semi-transparent stone)
-  if (hover && board.at(*hover) == double_go::Color::Empty &&
-      !board.must_pass() && board.is_legal(*hover)) {
+  if (!board.game_over() && hover &&
+      board.at(*hover) == double_go::Color::Empty && !board.must_pass() &&
+      board.is_legal(*hover)) {
     int cx = board_x(hover->col);
     int cy = board_y(hover->row);
     if (board.to_play() == double_go::Color::Black) {
@@ -415,46 +425,79 @@ static void render_board(SDL_Renderer *renderer, const double_go::Board &board,
   SDL_Rect status_rect{0, WIN_H - STATUS_HEIGHT, WIN_W, STATUS_HEIGHT};
   SDL_RenderFillRect(renderer, &status_rect);
 
-  // Player indicator circle
-  int indicator_cx = 24;
-  int indicator_cy = WIN_H - STATUS_HEIGHT / 2;
-  int indicator_r = 10;
-  if (board.to_play() == double_go::Color::Black) {
-    SDL_SetRenderDrawColor(renderer, BLACK_STONE.r, BLACK_STONE.g,
-                           BLACK_STONE.b, 255);
-    draw_filled_circle(renderer, indicator_cx, indicator_cy, indicator_r);
+  auto sr = board.score(komi);
+  int line1_y = WIN_H - STATUS_HEIGHT + 8;
+  int line2_y = line1_y + 20;
+
+  if (board.game_over()) {
+    // Game over display
+    std::string winner;
+    if (sr.black_score > sr.white_score)
+      winner = "Black wins";
+    else if (sr.white_score > sr.black_score)
+      winner = "White wins";
+    else
+      winner = "Draw";
+
+    std::string line1 = "GAME OVER | B:" + format_score(sr.black_score) +
+                        " W:" + format_score(sr.white_score) + " | " + winner;
+
+    SDL_SetRenderDrawColor(renderer, STATUS_TEXT.r, STATUS_TEXT.g,
+                           STATUS_TEXT.b, 255);
+    draw_text(renderer, 8, line1_y, line1.c_str());
+
+    std::string line2 = "R:reset  Q:quit";
+    draw_text(renderer, 8, line2_y, line2.c_str());
   } else {
-    SDL_SetRenderDrawColor(renderer, WHITE_STONE.r, WHITE_STONE.g,
-                           WHITE_STONE.b, 255);
-    draw_filled_circle(renderer, indicator_cx, indicator_cy, indicator_r);
-    SDL_SetRenderDrawColor(renderer, BLACK_STONE.r, BLACK_STONE.g,
-                           BLACK_STONE.b, 255);
-    draw_circle_outline(renderer, indicator_cx, indicator_cy, indicator_r);
+    // Player indicator circle
+    int indicator_cx = 24;
+    int indicator_cy = line1_y + 7;
+    int indicator_r = 7;
+    if (board.to_play() == double_go::Color::Black) {
+      SDL_SetRenderDrawColor(renderer, BLACK_STONE.r, BLACK_STONE.g,
+                             BLACK_STONE.b, 255);
+      draw_filled_circle(renderer, indicator_cx, indicator_cy, indicator_r);
+    } else {
+      SDL_SetRenderDrawColor(renderer, WHITE_STONE.r, WHITE_STONE.g,
+                             WHITE_STONE.b, 255);
+      draw_filled_circle(renderer, indicator_cx, indicator_cy, indicator_r);
+      SDL_SetRenderDrawColor(renderer, BLACK_STONE.r, BLACK_STONE.g,
+                             BLACK_STONE.b, 255);
+      draw_circle_outline(renderer, indicator_cx, indicator_cy, indicator_r);
+    }
+
+    // Build status string
+    std::string status;
+    const char *player =
+        board.to_play() == double_go::Color::Black ? "BLACK" : "WHITE";
+
+    if (board.must_pass()) {
+      status = std::string(player) + " MUST PASS (P)";
+    } else if (board.phase() == double_go::Phase::DoubleMove) {
+      status = std::string(player) + " place 2nd stone";
+    } else {
+      status = std::string(player) + " to play";
+    }
+
+    // Capture counts
+    std::string caps =
+        " | B:" + std::to_string(board.captures(double_go::Color::Black)) +
+        " W:" + std::to_string(board.captures(double_go::Color::White));
+    status += caps;
+
+    // Draw status text
+    SDL_SetRenderDrawColor(renderer, STATUS_TEXT.r, STATUS_TEXT.g,
+                           STATUS_TEXT.b, 255);
+    draw_text(renderer, 44, line1_y, status.c_str());
+
+    // Score line
+    std::string score_line =
+        "B:" + std::to_string(sr.black_stones + sr.black_territory) +
+        " W:" + std::to_string(sr.white_stones + sr.white_territory) + "+" +
+        format_score(komi) + "=" + format_score(sr.white_score) +
+        "  Komi:" + format_score(komi) + " [+/-]";
+    draw_text(renderer, 8, line2_y, score_line.c_str());
   }
-
-  // Build status string
-  std::string status;
-  const char *player =
-      board.to_play() == double_go::Color::Black ? "BLACK" : "WHITE";
-
-  if (board.must_pass()) {
-    status = std::string(player) + " MUST PASS (P)";
-  } else if (board.phase() == double_go::Phase::DoubleMove) {
-    status = std::string(player) + " place 2nd stone";
-  } else {
-    status = std::string(player) + " to play";
-  }
-
-  // Capture counts
-  std::string caps =
-      " | B:" + std::to_string(board.captures(double_go::Color::Black)) +
-      " W:" + std::to_string(board.captures(double_go::Color::White));
-  status += caps;
-
-  // Draw status text
-  SDL_SetRenderDrawColor(renderer, STATUS_TEXT.r, STATUS_TEXT.g, STATUS_TEXT.b,
-                         255);
-  draw_text(renderer, 44, WIN_H - STATUS_HEIGHT / 2 - 7, status.c_str());
 }
 
 // ── Main ────────────────────────────────────────────────────────────────────
@@ -488,6 +531,7 @@ int main(int /*argc*/, char * /*argv*/[]) {
   double_go::Board board(BOARD_SIZE);
   std::optional<double_go::Point> last_move;
   std::optional<double_go::Point> hover_point;
+  double komi = 6.5;
 
   bool running = true;
   while (running) {
@@ -504,6 +548,9 @@ int main(int /*argc*/, char * /*argv*/[]) {
       }
 
       case SDL_MOUSEBUTTONDOWN: {
+        if (board.game_over())
+          break;
+
         auto pt = pixel_to_point(event.button.x, event.button.y);
         if (!pt)
           break;
@@ -537,7 +584,8 @@ int main(int /*argc*/, char * /*argv*/[]) {
           running = false;
           break;
         case SDLK_p:
-          if (board.phase() == double_go::Phase::Normal) {
+          if (!board.game_over() &&
+              board.phase() == double_go::Phase::Normal) {
             board.pass();
             last_move = std::nullopt;
           }
@@ -545,6 +593,15 @@ int main(int /*argc*/, char * /*argv*/[]) {
         case SDLK_r:
           board = double_go::Board(BOARD_SIZE);
           last_move = std::nullopt;
+          break;
+        case SDLK_EQUALS:
+        case SDLK_PLUS:
+          komi += 0.5;
+          break;
+        case SDLK_MINUS:
+        case SDLK_UNDERSCORE:
+          if (komi >= 0.5)
+            komi -= 0.5;
           break;
         default:
           break;
@@ -559,7 +616,7 @@ int main(int /*argc*/, char * /*argv*/[]) {
 
     SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
     SDL_RenderClear(renderer);
-    render_board(renderer, board, last_move, hover_point);
+    render_board(renderer, board, last_move, hover_point, komi);
     SDL_RenderPresent(renderer);
   }
 

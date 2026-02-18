@@ -501,3 +501,116 @@ TEST(DoubleMove, SecondMoveKo) {
   b.pass();
   EXPECT_TRUE(b.play({1, 1}));
 }
+
+// ===== Scoring Tests =====
+
+// 25. Empty board has no territory for either side
+TEST(Scoring, EmptyBoardScore) {
+  Board b(9);
+  auto sr = b.score(6.5);
+  EXPECT_EQ(sr.black_stones, 0);
+  EXPECT_EQ(sr.white_stones, 0);
+  EXPECT_EQ(sr.black_territory, 0);
+  EXPECT_EQ(sr.white_territory, 0);
+  EXPECT_DOUBLE_EQ(sr.black_score, 0.0);
+  EXPECT_DOUBLE_EQ(sr.white_score, 6.5);
+}
+
+// 26. Full black board (last point is suicide, so 80 stones + 1 territory)
+TEST(Scoring, FullBlackBoard) {
+  Board b(9);
+  for (int r = 0; r < 9; r++) {
+    for (int c = 0; c < 9; c++) {
+      b.play({r, c}); // Black (last one fails — suicide)
+      if (r * 9 + c < 80)
+        b.pass(); // White pass
+    }
+  }
+  auto sr = b.score(0.0);
+  // Last corner is suicide, so 80 stones + 1 empty point owned by black
+  EXPECT_EQ(sr.black_stones, 80);
+  EXPECT_EQ(sr.white_stones, 0);
+  EXPECT_EQ(sr.black_territory, 1);
+  EXPECT_DOUBLE_EQ(sr.black_score, 81.0);
+}
+
+// 27. Simple territory — black owns top, white owns bottom
+TEST(Scoring, SimpleTerritory) {
+  Board b(9);
+  // Black wall along row 2, white wall along row 6
+  for (int c = 0; c < 9; c++) {
+    b.play({2, c}); // Black
+    b.play({6, c}); // White
+  }
+  auto sr = b.score(0.0);
+  // Rows 0-1 enclosed by black (18 pts), rows 7-8 enclosed by white (18 pts)
+  // Rows 3-5 bordered by both → dame
+  EXPECT_EQ(sr.black_territory, 18);
+  EXPECT_EQ(sr.white_territory, 18);
+  EXPECT_EQ(sr.black_stones, 9);
+  EXPECT_EQ(sr.white_stones, 9);
+  EXPECT_DOUBLE_EQ(sr.black_score, 27.0);
+  EXPECT_DOUBLE_EQ(sr.white_score, 27.0);
+}
+
+// 28. Neutral territory — empty region bordered by both colors
+TEST(Scoring, NeutralTerritory) {
+  Board b(9);
+  // Black at (0,0), White at (0,2). The point (0,1) borders both — neutral.
+  b.play({0, 0}); // B
+  b.play({0, 2}); // W
+  auto sr = b.score(0.0);
+  // (0,1) is in a region that borders both colors — dame
+  // The rest of the empty board also borders both colors
+  EXPECT_EQ(sr.black_territory, 0);
+  EXPECT_EQ(sr.white_territory, 0);
+}
+
+// 29. Komi is added to white's score
+TEST(Scoring, ScoreWithKomi) {
+  Board b(9);
+  auto sr = b.score(6.5);
+  EXPECT_DOUBLE_EQ(sr.white_score, 6.5);
+  EXPECT_DOUBLE_EQ(sr.black_score, 0.0);
+
+  auto sr2 = b.score(7.5);
+  EXPECT_DOUBLE_EQ(sr2.white_score, 7.5);
+}
+
+// ===== Game Over Tests =====
+
+// 30. Two consecutive passes end the game
+TEST(GameOver, ConsecutivePassesEndGame) {
+  Board b(9);
+  EXPECT_FALSE(b.game_over());
+  b.pass(); // Black passes
+  EXPECT_FALSE(b.game_over());
+  b.pass(); // White passes
+  EXPECT_TRUE(b.game_over());
+  EXPECT_EQ(b.consecutive_passes(), 2);
+}
+
+// 31. A move resets consecutive passes
+TEST(GameOver, MoveResetsConsecutivePasses) {
+  Board b(9);
+  b.pass();                          // Black passes
+  EXPECT_EQ(b.consecutive_passes(), 1);
+  b.play({4, 4});                    // White plays
+  EXPECT_EQ(b.consecutive_passes(), 0);
+  EXPECT_FALSE(b.game_over());
+}
+
+// 32. Double move resets consecutive passes
+TEST(GameOver, DoubleMoveThenPass) {
+  Board b(9);
+  b.pass(); // Black passes
+  EXPECT_EQ(b.consecutive_passes(), 1);
+
+  // White does a double move — should reset consecutive passes
+  b.apply(Action::double_first({3, 3}));
+  EXPECT_EQ(b.consecutive_passes(), 0);
+
+  b.apply(Action::double_second({4, 4}));
+  EXPECT_EQ(b.consecutive_passes(), 0);
+  EXPECT_FALSE(b.game_over());
+}

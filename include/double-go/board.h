@@ -7,6 +7,15 @@
 
 namespace double_go {
 
+struct ScoreResult {
+    int black_territory;
+    int white_territory;
+    int black_stones;
+    int white_stones;
+    double black_score;
+    double white_score;
+};
+
 class Board {
   public:
     explicit Board(int size = 19);
@@ -18,6 +27,9 @@ class Board {
     int captures(Color c) const;
     Phase phase() const { return phase_; }
     bool must_pass() const;
+    bool game_over() const;
+    int consecutive_passes() const { return consecutive_passes_; }
+    ScoreResult score(double komi = 6.5) const;
 
     bool is_on_board(Point p) const;
     bool is_legal(Point p) const;
@@ -49,6 +61,7 @@ class Board {
     Phase phase_ = Phase::Normal;
     bool black_must_pass_ = false;
     bool white_must_pass_ = false;
+    int consecutive_passes_ = 0;
 };
 
 } // namespace double_go

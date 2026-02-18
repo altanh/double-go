@@ -190,6 +190,74 @@ void Board::apply_move(Point p) {
   }
 }
 
+bool Board::game_over() const {
+  return consecutive_passes_ >= 2 && phase_ == Phase::Normal;
+}
+
+ScoreResult Board::score(double komi) const {
+  int black_stones = 0, white_stones = 0;
+  int black_territory = 0, white_territory = 0;
+  int total = size_ * size_;
+
+  for (int i = 0; i < total; i++) {
+    if (grid_[i] == Color::Black)
+      black_stones++;
+    else if (grid_[i] == Color::White)
+      white_stones++;
+  }
+
+  std::vector<bool> visited(total, false);
+  for (int i = 0; i < total; i++) {
+    if (visited[i] || grid_[i] != Color::Empty)
+      continue;
+
+    // Flood-fill connected empty region
+    std::vector<int> region;
+    std::vector<int> stack;
+    stack.push_back(i);
+    visited[i] = true;
+    bool borders_black = false, borders_white = false;
+
+    while (!stack.empty()) {
+      int idx = stack.back();
+      stack.pop_back();
+      region.push_back(idx);
+
+      Point p = point(idx);
+      Point nbrs[4];
+      int n;
+      neighbors(p, nbrs, n);
+      for (int j = 0; j < n; j++) {
+        int ni = index(nbrs[j]);
+        if (visited[ni])
+          continue;
+        if (grid_[ni] == Color::Empty) {
+          visited[ni] = true;
+          stack.push_back(ni);
+        } else if (grid_[ni] == Color::Black) {
+          borders_black = true;
+        } else {
+          borders_white = true;
+        }
+      }
+    }
+
+    if (borders_black && !borders_white)
+      black_territory += static_cast<int>(region.size());
+    else if (borders_white && !borders_black)
+      white_territory += static_cast<int>(region.size());
+  }
+
+  ScoreResult result;
+  result.black_territory = black_territory;
+  result.white_territory = white_territory;
+  result.black_stones = black_stones;
+  result.white_stones = white_stones;
+  result.black_score = black_stones + black_territory;
+  result.white_score = white_stones + white_territory + komi;
+  return result;
+}
+
 bool Board::apply(Action a) {
   switch (a.type) {
   case ActionType::Pass:
@@ -201,6 +269,7 @@ bool Board::apply(Action a) {
     else
       white_must_pass_ = false;
     to_play_ = opponent(to_play_);
+    consecutive_passes_++;
     return true;
 
   case ActionType::Move:
@@ -210,6 +279,7 @@ bool Board::apply(Action a) {
       return false;
     apply_move(a.point);
     to_play_ = opponent(to_play_);
+    consecutive_passes_ = 0;
     return true;
 
   case ActionType::DoubleFirst:
@@ -219,6 +289,7 @@ bool Board::apply(Action a) {
       return false;
     apply_move(a.point);
     phase_ = Phase::DoubleMove;
+    consecutive_passes_ = 0;
     return true;
 
   case ActionType::DoubleSecond:
@@ -233,6 +304,7 @@ bool Board::apply(Action a) {
       white_must_pass_ = true;
     phase_ = Phase::Normal;
     to_play_ = opponent(to_play_);
+    consecutive_passes_ = 0;
     return true;
   }
   return false;
