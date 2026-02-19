@@ -265,22 +265,22 @@ TEST(Board, MultipleSimultaneousCaptures) {
 // 13. Double move places two same-color stones, turn flips once
 TEST(DoubleMove, PlacesTwoSameColorStones) {
   Board b(9);
-  EXPECT_TRUE(b.apply(Action::double_first({3, 3})));
+  EXPECT_TRUE(b.apply(Action::place({3, 3})));
   EXPECT_EQ(b.at({3, 3}), Color::Black);
   EXPECT_EQ(b.to_play(), Color::Black); // still Black's turn
-  EXPECT_EQ(b.phase(), Phase::DoubleMove);
+  EXPECT_EQ(b.phase(), Phase::Second);
 
-  EXPECT_TRUE(b.apply(Action::double_second({4, 4})));
+  EXPECT_TRUE(b.apply(Action::place({4, 4})));
   EXPECT_EQ(b.at({4, 4}), Color::Black);
   EXPECT_EQ(b.to_play(), Color::White); // now White's turn
-  EXPECT_EQ(b.phase(), Phase::Normal);
+  EXPECT_EQ(b.phase(), Phase::First);
 }
 
 // 14. After double move, must_pass is true, legal_actions returns only Pass
 TEST(DoubleMove, MustPassAfterDoubleMove) {
   Board b(9);
-  b.apply(Action::double_first({3, 3}));
-  b.apply(Action::double_second({4, 4}));
+  b.apply(Action::place({3, 3}));
+  b.apply(Action::place({4, 4}));
 
   // White plays
   b.play({5, 5});
@@ -295,8 +295,8 @@ TEST(DoubleMove, MustPassAfterDoubleMove) {
 // 15. Forced pass clears must_pass, player can play normally
 TEST(DoubleMove, ForcedPassClearsMustPass) {
   Board b(9);
-  b.apply(Action::double_first({3, 3}));
-  b.apply(Action::double_second({4, 4}));
+  b.apply(Action::place({3, 3}));
+  b.apply(Action::place({4, 4}));
 
   b.play({5, 5}); // White
   EXPECT_TRUE(b.must_pass());
@@ -318,7 +318,7 @@ TEST(DoubleMove, CapturesFromBothStones) {
   b.play({0, 0}); // W
   // Black plays double move to capture: first (1,0) then something else
   // (0,0) is surrounded by B(0,1) and after B(1,0)
-  b.apply(Action::double_first({1, 0})); // B captures W(0,0)
+  b.apply(Action::place({1, 0})); // B captures W(0,0)
   EXPECT_EQ(b.at({0, 0}), Color::Empty);
   EXPECT_EQ(b.captures(Color::Black), 1);
 
@@ -326,41 +326,39 @@ TEST(DoubleMove, CapturesFromBothStones) {
   // Place another white stone to capture with second move
   // W(2,0) surrounded by B(1,0) already placed, need B(2,1) and B(3,0)
   // For simplicity, just place second stone normally
-  b.apply(Action::double_second({5, 5}));
+  b.apply(Action::place({5, 5}));
   EXPECT_EQ(b.captures(Color::Black), 1); // only 1 capture total
   EXPECT_EQ(b.to_play(), Color::White);
 }
 
-// 17. DoubleFirst followed by illegal DoubleSecond returns false, board
-// unchanged from after first stone
-TEST(DoubleMove, IllegalDoubleSecondPreservesState) {
+// 17. Illegal Place in Second phase preserves state
+TEST(DoubleMove, IllegalPlaceInSecondPhasePreservesState) {
   Board b(9);
-  b.apply(Action::double_first({3, 3}));
+  b.apply(Action::place({3, 3}));
 
   // Try to place on occupied square
-  EXPECT_FALSE(b.apply(Action::double_second({3, 3})));
-  EXPECT_EQ(b.phase(), Phase::DoubleMove);
+  EXPECT_FALSE(b.apply(Action::place({3, 3})));
+  EXPECT_EQ(b.phase(), Phase::Second);
   EXPECT_EQ(b.to_play(), Color::Black);
   EXPECT_EQ(b.at({3, 3}), Color::Black);
 
   // Can still complete with a legal move
-  EXPECT_TRUE(b.apply(Action::double_second({4, 4})));
-  EXPECT_EQ(b.phase(), Phase::Normal);
+  EXPECT_TRUE(b.apply(Action::place({4, 4})));
+  EXPECT_EQ(b.phase(), Phase::First);
 }
 
-// 18. Cannot start double move while must_pass
-TEST(DoubleMove, CannotDoubleWhileMustPass) {
+// 18. Cannot place while must_pass
+TEST(DoubleMove, CannotPlaceWhileMustPass) {
   Board b(9);
   // Black double moves
-  b.apply(Action::double_first({3, 3}));
-  b.apply(Action::double_second({4, 4}));
+  b.apply(Action::place({3, 3}));
+  b.apply(Action::place({4, 4}));
 
   b.play({5, 5}); // White
 
   // Black must pass
   EXPECT_TRUE(b.must_pass());
-  EXPECT_FALSE(b.apply(Action::double_first({6, 6})));
-  EXPECT_FALSE(b.apply(Action::move({6, 6})));
+  EXPECT_FALSE(b.apply(Action::place({6, 6})));
 }
 
 // 19. Ko from first stone doesn't block second stone at ko point
@@ -382,28 +380,28 @@ TEST(DoubleMove, KoFromFirstStoneDoesNotBlockSecond) {
   b.play({1, 1}); // W
 
   // Black uses double move: first stone captures at (1,2) creating ko
-  b.apply(Action::double_first({1, 2}));
+  b.apply(Action::place({1, 2}));
   EXPECT_EQ(b.at({1, 1}), Color::Empty);
   EXPECT_EQ(b.captures(Color::Black), 1);
   ASSERT_TRUE(b.ko_point().has_value());
   EXPECT_EQ(*b.ko_point(), (Point{1, 1}));
 
   // Second stone can fill ko
-  EXPECT_TRUE(b.apply(Action::double_second({1, 1})));
+  EXPECT_TRUE(b.apply(Action::place({1, 1})));
 }
 
 // 20. Both players use double moves independently
 TEST(DoubleMove, BothPlayersDoubleMove) {
   Board b(9);
   // Black double move
-  b.apply(Action::double_first({3, 3}));
-  b.apply(Action::double_second({3, 4}));
+  b.apply(Action::place({3, 3}));
+  b.apply(Action::place({3, 4}));
   EXPECT_EQ(b.at({3, 3}), Color::Black);
   EXPECT_EQ(b.at({3, 4}), Color::Black);
 
   // White double move
-  b.apply(Action::double_first({5, 5}));
-  b.apply(Action::double_second({5, 6}));
+  b.apply(Action::place({5, 5}));
+  b.apply(Action::place({5, 6}));
   EXPECT_EQ(b.at({5, 5}), Color::White);
   EXPECT_EQ(b.at({5, 6}), Color::White);
 
@@ -420,55 +418,54 @@ TEST(DoubleMove, BothPlayersDoubleMove) {
   EXPECT_TRUE(b.play({7, 7}));
 }
 
-// 21. legal_actions in DoubleMove phase returns only DoubleSecond actions
-TEST(DoubleMove, LegalActionsInDoubleMovePhase) {
+// 21. legal_actions in Second phase returns Pass + Place actions
+TEST(DoubleMove, LegalActionsInSecondPhase) {
   Board b(9);
-  b.apply(Action::double_first({0, 0}));
-  EXPECT_EQ(b.phase(), Phase::DoubleMove);
+  b.apply(Action::place({0, 0}));
+  EXPECT_EQ(b.phase(), Phase::Second);
 
   auto actions = b.legal_actions();
-  for (const auto &a : actions) {
-    EXPECT_EQ(a.type, ActionType::DoubleSecond);
-  }
-  // Should have all empty legal points as DoubleSecond
   EXPECT_FALSE(actions.empty());
 
-  // No Pass or Move or DoubleFirst in the list
+  bool has_pass = false, has_place = false;
   for (const auto &a : actions) {
-    EXPECT_NE(a.type, ActionType::Pass);
-    EXPECT_NE(a.type, ActionType::Move);
-    EXPECT_NE(a.type, ActionType::DoubleFirst);
+    if (a.type == ActionType::Pass) has_pass = true;
+    if (a.type == ActionType::Place) has_place = true;
   }
+  EXPECT_TRUE(has_pass);
+  EXPECT_TRUE(has_place);
 }
 
-// 22. Cannot pass during DoubleMove phase
-TEST(DoubleMove, CannotPassDuringDoubleMove) {
+// 22. Pass during Second phase completes as single move
+TEST(DoubleMove, PassDuringSecondPhaseCompletesAsSingleMove) {
   Board b(9);
-  b.apply(Action::double_first({3, 3}));
-  EXPECT_FALSE(b.apply(Action::pass()));
-  EXPECT_EQ(b.phase(), Phase::DoubleMove);
+  b.apply(Action::place({3, 3}));
+  EXPECT_EQ(b.phase(), Phase::Second);
+  EXPECT_TRUE(b.apply(Action::pass()));
+  EXPECT_EQ(b.phase(), Phase::First);
+  EXPECT_EQ(b.to_play(), Color::White);
+  // No penalty — black should not have must_pass on their next turn
+  b.pass(); // White passes
+  EXPECT_FALSE(b.must_pass()); // Black's turn, no penalty
 }
 
-// 23. Normal legal_actions includes Pass, Move, and DoubleFirst
-TEST(DoubleMove, NormalLegalActionsIncludeAllTypes) {
+// 23. First phase legal_actions includes Pass and Place
+TEST(DoubleMove, FirstPhaseLegalActionsIncludePassAndPlace) {
   Board b(9);
   auto actions = b.legal_actions();
 
-  bool has_pass = false, has_move = false, has_double_first = false;
+  bool has_pass = false, has_place = false;
   for (const auto &a : actions) {
     if (a.type == ActionType::Pass)
       has_pass = true;
-    if (a.type == ActionType::Move)
-      has_move = true;
-    if (a.type == ActionType::DoubleFirst)
-      has_double_first = true;
+    if (a.type == ActionType::Place)
+      has_place = true;
   }
   EXPECT_TRUE(has_pass);
-  EXPECT_TRUE(has_move);
-  EXPECT_TRUE(has_double_first);
+  EXPECT_TRUE(has_place);
 
-  // Count: 1 Pass + 81 Move + 81 DoubleFirst = 163 on empty 9x9
-  EXPECT_EQ(actions.size(), 163u);
+  // Count: 1 Pass + 81 Place = 82 on empty 9x9
+  EXPECT_EQ(actions.size(), 82u);
 }
 
 // 24. Taking a ko on the second move correctly sets the ko point, and
@@ -492,8 +489,8 @@ TEST(DoubleMove, SecondMoveKo) {
   b.play({8, 8}); // B elsewhere
   b.play({1, 1}); // W
 
-  b.apply(Action::double_first({7, 7}));
-  b.apply(Action::double_second({1, 2})); // B take ko
+  b.apply(Action::place({7, 7}));
+  b.apply(Action::place({1, 2})); // B take ko
 
   EXPECT_FALSE(b.play({1, 1})); // W can't retake
   EXPECT_TRUE(b.play({6, 6}));  // W play away
@@ -577,6 +574,69 @@ TEST(Scoring, ScoreWithKomi) {
   EXPECT_DOUBLE_EQ(sr2.white_score, 7.5);
 }
 
+// 25. Place is accepted even when no second move is possible (can pass instead)
+TEST(DoubleMove, PlaceAcceptedWhenNoSecondMove) {
+  // 4x4 board with Black at (0,1) and (1,0), White everywhere else
+  // except (0,0), (1,1), (1,3), (2,2) which are empty.
+  //
+  //   .  B  W  W
+  //   B  .  W  .
+  //   W  W  .  W
+  //   W  W  W  W
+  //
+  // (0,0) and (1,1) are the only legal points for Black (the others are
+  // suicide). After placing at either one, the B group has only 1 liberty
+  // and the remaining empty points are all suicide — no legal second move.
+  // But in the new model, Place IS accepted because player can pass to
+  // complete as a single move.
+  Board b(4);
+  b.play({0, 1}); // B
+  b.play({3, 0}); // W
+  b.play({1, 0}); // B
+  b.play({3, 1}); // W
+  b.pass();        // B
+  b.play({3, 2}); // W
+  b.pass();        // B
+  b.play({3, 3}); // W
+  b.pass();        // B
+  b.play({2, 3}); // W
+  b.pass();        // B
+  b.play({2, 0}); // W
+  b.pass();        // B
+  b.play({2, 1}); // W
+  b.pass();        // B
+  b.play({0, 2}); // W
+  b.pass();        // B
+  b.play({0, 3}); // W
+  b.pass();        // B
+  b.play({1, 2}); // W
+
+  // Verify board state
+  EXPECT_EQ(b.to_play(), Color::Black);
+  EXPECT_EQ(b.at({0, 0}), Color::Empty);
+  EXPECT_EQ(b.at({1, 1}), Color::Empty);
+  EXPECT_EQ(b.at({1, 3}), Color::Empty);
+  EXPECT_EQ(b.at({2, 2}), Color::Empty);
+  EXPECT_EQ(b.at({0, 1}), Color::Black);
+  EXPECT_EQ(b.at({1, 0}), Color::Black);
+
+  // (0,0) and (1,1) are legal as moves
+  EXPECT_TRUE(b.is_legal({0, 0}));
+  EXPECT_TRUE(b.is_legal({1, 1}));
+  // (1,3) and (2,2) are suicide
+  EXPECT_FALSE(b.is_legal({1, 3}));
+  EXPECT_FALSE(b.is_legal({2, 2}));
+
+  // Place IS accepted (enters Second phase)
+  EXPECT_TRUE(b.apply(Action::place({0, 0})));
+  EXPECT_EQ(b.phase(), Phase::Second);
+
+  // Pass to complete as single move
+  b.apply(Action::pass());
+  EXPECT_EQ(b.phase(), Phase::First);
+  EXPECT_EQ(b.to_play(), Color::White);
+}
+
 // ===== Game Over Tests =====
 
 // 30. Two consecutive passes end the game
@@ -607,10 +667,155 @@ TEST(GameOver, DoubleMoveThenPass) {
   EXPECT_EQ(b.consecutive_passes(), 1);
 
   // White does a double move — should reset consecutive passes
-  b.apply(Action::double_first({3, 3}));
+  b.apply(Action::place({3, 3}));
   EXPECT_EQ(b.consecutive_passes(), 0);
 
-  b.apply(Action::double_second({4, 4}));
+  b.apply(Action::place({4, 4}));
   EXPECT_EQ(b.consecutive_passes(), 0);
   EXPECT_FALSE(b.game_over());
+}
+
+// 33. Forced pass after double move does not count toward game end
+TEST(GameOver, ForcedPassDoesNotEndGame) {
+  Board b(9);
+  // Black double moves
+  b.apply(Action::place({3, 3}));
+  b.apply(Action::place({4, 4}));
+  // White's turn — white passes voluntarily
+  b.pass();
+  EXPECT_EQ(b.consecutive_passes(), 1);
+  // Black must pass (forced from double move)
+  EXPECT_TRUE(b.must_pass());
+  b.pass();
+  // Forced pass should NOT count — game should NOT be over
+  EXPECT_FALSE(b.game_over());
+  EXPECT_EQ(b.consecutive_passes(), 0);
+}
+
+// 34. Forced pass followed by voluntary pass does not end game
+TEST(GameOver, ForcedThenVoluntaryPassDoesNotEndGame) {
+  Board b(9);
+  b.apply(Action::place({3, 3}));
+  b.apply(Action::place({4, 4}));
+  // White plays normally
+  b.play({5, 5});
+  // Black forced pass
+  EXPECT_TRUE(b.must_pass());
+  b.pass();
+  EXPECT_EQ(b.consecutive_passes(), 0);
+  // White passes voluntarily
+  b.pass();
+  EXPECT_EQ(b.consecutive_passes(), 1);
+  // Only one voluntary pass — game NOT over
+  EXPECT_FALSE(b.game_over());
+}
+
+// ===== RandomBot Tests =====
+
+// 33. RandomBot always returns a legal action
+TEST(RandomBot, ReturnsLegalAction) {
+  Board b(9);
+  RandomBot bot(42);
+  for (int i = 0; i < 50 && !b.game_over(); ++i) {
+    auto action = bot.pick_action(b);
+    auto legal = b.legal_actions();
+    EXPECT_NE(std::find(legal.begin(), legal.end(), action), legal.end());
+    b.apply(action);
+  }
+}
+
+// 34. RandomBot plays a full game until game_over in <1000 moves
+TEST(RandomBot, PlaysFullGame) {
+  Board b(9);
+  RandomBot bot(123);
+  int moves = 0;
+  while (!b.game_over() && moves < 1000) {
+    b.apply(bot.pick_action(b));
+    ++moves;
+  }
+  EXPECT_TRUE(b.game_over());
+  EXPECT_LT(moves, 1000);
+}
+
+// 35. Different seeds produce different move sequences
+TEST(RandomBot, DifferentSeedsDifferentGames) {
+  auto play_game = [](unsigned seed) {
+    Board b(9);
+    RandomBot bot(seed);
+    std::vector<Action> history;
+    for (int i = 0; i < 20 && !b.game_over(); ++i) {
+      auto a = bot.pick_action(b);
+      history.push_back(a);
+      b.apply(a);
+    }
+    return history;
+  };
+
+  auto game1 = play_game(42);
+  auto game2 = play_game(99);
+  EXPECT_NE(game1, game2);
+}
+
+// 36. Same seed produces the same game (deterministic)
+TEST(RandomBot, DeterministicWithSameSeed) {
+  auto play_game = [](unsigned seed) {
+    Board b(9);
+    RandomBot bot(seed);
+    std::vector<Action> history;
+    for (int i = 0; i < 50 && !b.game_over(); ++i) {
+      auto a = bot.pick_action(b);
+      history.push_back(a);
+      b.apply(a);
+    }
+    return history;
+  };
+
+  auto game1 = play_game(42);
+  auto game2 = play_game(42);
+  EXPECT_EQ(game1, game2);
+}
+
+// ===== New Tests =====
+
+// 37. Pass as second place preserves ko from first stone
+TEST(DoubleMove, PassAsSecondPlacePreservesKo) {
+  Board b(9);
+  // Standard ko setup
+  b.play({0, 1}); // B
+  b.play({0, 2}); // W
+  b.play({1, 0}); // B
+  b.play({1, 3}); // W
+  b.play({2, 1}); // B
+  b.play({2, 2}); // W
+  b.play({8, 8}); // B elsewhere
+  b.play({1, 1}); // W
+
+  // Black places first stone capturing at (1,2), creating ko at (1,1)
+  b.apply(Action::place({1, 2}));
+  ASSERT_TRUE(b.ko_point().has_value());
+  EXPECT_EQ(*b.ko_point(), (Point{1, 1}));
+
+  // Pass to complete as single move — ko should be preserved
+  b.apply(Action::pass());
+  ASSERT_TRUE(b.ko_point().has_value());
+  EXPECT_EQ(*b.ko_point(), (Point{1, 1}));
+
+  // Opponent can't play at ko point
+  EXPECT_FALSE(b.is_legal({1, 1}));
+}
+
+// 38. Single move (place + pass) incurs no penalty
+TEST(DoubleMove, SingleMoveNoPenalty) {
+  Board b(9);
+  // Black places then passes (single move)
+  b.apply(Action::place({3, 3}));
+  b.apply(Action::pass());
+  EXPECT_EQ(b.to_play(), Color::White);
+
+  // White plays
+  b.play({5, 5});
+
+  // Black should NOT have must_pass
+  EXPECT_FALSE(b.must_pass());
+  EXPECT_TRUE(b.play({7, 7}));
 }

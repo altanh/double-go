@@ -8,8 +8,8 @@ int main() {
               << board.size() << "\n";
 
     // Black plays a double move
-    board.apply(double_go::Action::double_first({2, 2}));
-    board.apply(double_go::Action::double_second({2, 3}));
+    board.apply(double_go::Action::place({2, 2}));
+    board.apply(double_go::Action::place({2, 3}));
     std::cout << "Black double-moved at (2,2) and (2,3).\n";
     std::cout << "Turn: "
               << (board.to_play() == double_go::Color::Black ? "Black"

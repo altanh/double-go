@@ -17,18 +17,16 @@ struct Point {
     bool operator==(const Point&) const = default;
 };
 
-enum class Phase : uint8_t { Normal, DoubleMove };
+enum class Phase : uint8_t { First, Second };
 
-enum class ActionType : uint8_t { Pass, Move, DoubleFirst, DoubleSecond };
+enum class ActionType : uint8_t { Pass, Place };
 
 struct Action {
     ActionType type;
     Point point{};
 
     static Action pass() { return {ActionType::Pass}; }
-    static Action move(Point p) { return {ActionType::Move, p}; }
-    static Action double_first(Point p) { return {ActionType::DoubleFirst, p}; }
-    static Action double_second(Point p) { return {ActionType::DoubleSecond, p}; }
+    static Action place(Point p) { return {ActionType::Place, p}; }
 
     bool operator==(const Action&) const = default;
 };

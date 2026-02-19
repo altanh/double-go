@@ -1,14 +1,17 @@
 #include "gui_common.h"
 
+#include <algorithm>
+#include <random>
+
 int main(int /*argc*/, char * /*argv*/[]) {
   if (SDL_Init(SDL_INIT_VIDEO) != 0) {
     SDL_Log("SDL_Init failed: %s", SDL_GetError());
     return 1;
   }
 
-  SDL_Window *window =
-      SDL_CreateWindow("Double Go", SDL_WINDOWPOS_CENTERED,
-                       SDL_WINDOWPOS_CENTERED, WIN_W, WIN_H, SDL_WINDOW_SHOWN);
+  SDL_Window *window = SDL_CreateWindow(
+      "Double Go - Bot vs Bot", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED,
+      WIN_W, WIN_H, SDL_WINDOW_SHOWN);
   if (!window) {
     SDL_Log("SDL_CreateWindow failed: %s", SDL_GetError());
     SDL_Quit();
@@ -26,10 +29,17 @@ int main(int /*argc*/, char * /*argv*/[]) {
 
   SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
 
+  std::random_device rd;
+  double_go::RandomBot black_bot(rd());
+  double_go::RandomBot white_bot(rd());
+
   double_go::Board board(BOARD_SIZE);
   std::optional<double_go::Point> last_move;
-  std::optional<double_go::Point> hover_point;
   double komi = 6.5;
+
+  bool paused = false;
+  Uint32 move_delay_ms = 200;
+  Uint32 last_move_time = SDL_GetTicks();
 
   bool running = true;
   while (running) {
@@ -40,68 +50,58 @@ int main(int /*argc*/, char * /*argv*/[]) {
         running = false;
         break;
 
-      case SDL_MOUSEMOTION: {
-        hover_point = pixel_to_point(event.motion.x, event.motion.y);
-        break;
-      }
-
-      case SDL_MOUSEBUTTONDOWN: {
-        if (board.game_over())
-          break;
-
-        auto pt = pixel_to_point(event.button.x, event.button.y);
-        if (!pt)
-          break;
-
-        if (board.must_pass())
-          break;
-
-        if (event.button.button == SDL_BUTTON_LEFT) {
-          if (board.apply(double_go::Action::place(*pt)))
-            last_move = *pt;
-        }
-        break;
-      }
-
-      case SDL_KEYDOWN: {
+      case SDL_KEYDOWN:
         switch (event.key.keysym.sym) {
         case SDLK_q:
         case SDLK_ESCAPE:
           running = false;
           break;
-        case SDLK_p:
-          if (!board.game_over()) {
-            board.pass();
-            last_move = std::nullopt;
-          }
-          break;
         case SDLK_r:
+          black_bot = double_go::RandomBot(rd());
+          white_bot = double_go::RandomBot(rd());
           board = double_go::Board(BOARD_SIZE);
           last_move = std::nullopt;
+          last_move_time = SDL_GetTicks();
           break;
-        case SDLK_EQUALS:
-        case SDLK_PLUS:
-          komi += 0.5;
+        case SDLK_SPACE:
+          paused = !paused;
           break;
-        case SDLK_MINUS:
-        case SDLK_UNDERSCORE:
-          if (komi >= 0.5)
-            komi -= 0.5;
+        case SDLK_UP:
+          move_delay_ms = std::max(20u, move_delay_ms / 2);
+          break;
+        case SDLK_DOWN:
+          move_delay_ms = std::min(2000u, move_delay_ms * 2);
           break;
         default:
           break;
         }
         break;
-      }
 
       default:
         break;
       }
     }
 
+    // Auto-play on timer
+    if (!paused && !board.game_over()) {
+      Uint32 now = SDL_GetTicks();
+      if (now - last_move_time >= move_delay_ms) {
+        auto &bot = (board.to_play() == double_go::Color::Black) ? black_bot
+                                                                  : white_bot;
+        auto action = bot.pick_action(board);
+        board.apply(action);
+        if (action.type == double_go::ActionType::Place) {
+          last_move = action.point;
+        } else {
+          last_move = std::nullopt;
+        }
+        last_move_time = now;
+      }
+    }
+
     SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
     SDL_RenderClear(renderer);
-    render_board(renderer, board, last_move, hover_point, komi);
+    render_board(renderer, board, last_move, std::nullopt, komi);
     SDL_RenderPresent(renderer);
   }
 

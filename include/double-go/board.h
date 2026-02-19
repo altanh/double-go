@@ -51,14 +51,13 @@ class Board {
     void flood(Point p, Color color, std::vector<bool>& visited,
                int& lib_count) const;
     void apply_move(Point p);
-
     int size_;
     std::vector<Color> grid_;
     Color to_play_ = Color::Black;
     std::optional<Point> ko_point_;
     int black_captures_ = 0;
     int white_captures_ = 0;
-    Phase phase_ = Phase::Normal;
+    Phase phase_ = Phase::First;
     bool black_must_pass_ = false;
     bool white_must_pass_ = false;
     int consecutive_passes_ = 0;

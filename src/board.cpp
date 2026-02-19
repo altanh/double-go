@@ -115,7 +115,7 @@ bool Board::is_legal(Point p) const {
   if (!is_on_board(p) || grid_[index(p)] != Color::Empty)
     return false;
 
-  if (ko_point_ && *ko_point_ == p && phase() == Phase::Normal)
+  if (ko_point_ && *ko_point_ == p && phase() == Phase::First)
     return false;
 
   Color me = to_play_;
@@ -191,7 +191,7 @@ void Board::apply_move(Point p) {
 }
 
 bool Board::game_over() const {
-  return consecutive_passes_ >= 2 && phase_ == Phase::Normal;
+  return consecutive_passes_ >= 2 && phase_ == Phase::First;
 }
 
 ScoreResult Board::score(double komi) const {
@@ -259,52 +259,46 @@ ScoreResult Board::score(double komi) const {
 }
 
 bool Board::apply(Action a) {
+  if (game_over()) return false;
+
   switch (a.type) {
   case ActionType::Pass:
-    if (phase_ == Phase::DoubleMove)
-      return false;
+    if (phase_ == Phase::Second) {
+      // Pass on second sub-action = single move, no penalty
+      phase_ = Phase::First;
+      to_play_ = opponent(to_play_);
+      consecutive_passes_ = 0;
+      // Ko from first stone preserved
+      return true;
+    }
+    // Pass on first sub-action
     ko_point_.reset();
-    if (to_play_ == Color::Black)
-      black_must_pass_ = false;
-    else
-      white_must_pass_ = false;
-    to_play_ = opponent(to_play_);
-    consecutive_passes_++;
+    if (must_pass()) {
+      if (to_play_ == Color::Black) black_must_pass_ = false;
+      else white_must_pass_ = false;
+      to_play_ = opponent(to_play_);
+      consecutive_passes_ = 0;
+    } else {
+      to_play_ = opponent(to_play_);
+      consecutive_passes_++;
+    }
     return true;
 
-  case ActionType::Move:
-    if (phase_ != Phase::Normal || must_pass())
-      return false;
-    if (!is_legal(a.point))
-      return false;
+  case ActionType::Place:
+    if (must_pass()) return false;
+    if (!is_legal(a.point)) return false;
     apply_move(a.point);
-    to_play_ = opponent(to_play_);
-    consecutive_passes_ = 0;
-    return true;
-
-  case ActionType::DoubleFirst:
-    if (phase_ != Phase::Normal || must_pass())
-      return false;
-    if (!is_legal(a.point))
-      return false;
-    apply_move(a.point);
-    phase_ = Phase::DoubleMove;
-    consecutive_passes_ = 0;
-    return true;
-
-  case ActionType::DoubleSecond:
-    if (phase_ != Phase::DoubleMove)
-      return false;
-    if (!is_legal(a.point))
-      return false;
-    apply_move(a.point);
-    if (to_play_ == Color::Black)
-      black_must_pass_ = true;
-    else
-      white_must_pass_ = true;
-    phase_ = Phase::Normal;
-    to_play_ = opponent(to_play_);
-    consecutive_passes_ = 0;
+    if (phase_ == Phase::First) {
+      phase_ = Phase::Second;
+      consecutive_passes_ = 0;
+    } else {
+      // Double move complete — penalty
+      if (to_play_ == Color::Black) black_must_pass_ = true;
+      else white_must_pass_ = true;
+      phase_ = Phase::First;
+      to_play_ = opponent(to_play_);
+      consecutive_passes_ = 0;
+    }
     return true;
   }
   return false;
@@ -312,13 +306,6 @@ bool Board::apply(Action a) {
 
 std::vector<Action> Board::legal_actions() const {
   std::vector<Action> actions;
-  if (phase_ == Phase::DoubleMove) {
-    for (int r = 0; r < size_; r++)
-      for (int c = 0; c < size_; c++)
-        if (is_legal({r, c}))
-          actions.push_back(Action::double_second({r, c}));
-    return actions;
-  }
   if (must_pass()) {
     actions.push_back(Action::pass());
     return actions;
@@ -326,14 +313,16 @@ std::vector<Action> Board::legal_actions() const {
   actions.push_back(Action::pass());
   for (int r = 0; r < size_; r++)
     for (int c = 0; c < size_; c++)
-      if (is_legal({r, c})) {
-        actions.push_back(Action::move({r, c}));
-        actions.push_back(Action::double_first({r, c}));
-      }
+      if (is_legal({r, c}))
+        actions.push_back(Action::place({r, c}));
   return actions;
 }
 
-bool Board::play(Point p) { return apply(Action::move(p)); }
+bool Board::play(Point p) {
+  if (!apply(Action::place(p))) return false;
+  apply(Action::pass()); // complete as single move
+  return true;
+}
 
 void Board::pass() { apply(Action::pass()); }
 
