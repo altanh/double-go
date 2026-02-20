@@ -53,9 +53,6 @@ int main(int /*argc*/, char * /*argv*/[]) {
         if (!pt)
           break;
 
-        if (board.must_pass())
-          break;
-
         if (event.button.button == SDL_BUTTON_LEFT) {
           if (board.apply(double_go::Action::place(*pt)))
             last_move = *pt;

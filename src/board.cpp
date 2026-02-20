@@ -1,6 +1,7 @@
 #include "double-go/board.h"
 
 #include <array>
+#include <cassert>
 
 namespace double_go {
 
@@ -115,7 +116,13 @@ bool Board::is_legal(Point p) const {
   if (!is_on_board(p) || grid_[index(p)] != Color::Empty)
     return false;
 
-  if (ko_point_ && *ko_point_ == p && phase() == Phase::First)
+  // Fact: the ko point is cleared after the bonus move, since it can be
+  // immediately filled, or the player can play away or pass in the next phase.
+  // If a ko point is set in the first move, then it can be filled in the
+  // second. Therefore, if a ko point is set, then it's only illegal to play it
+  // if it's the players bonus or first move.
+
+  if (ko_point_ && *ko_point_ == p && phase_ != Phase::Second)
     return false;
 
   Color me = to_play_;
@@ -155,10 +162,6 @@ std::vector<Point> Board::legal_moves() const {
   return moves;
 }
 
-bool Board::must_pass() const {
-  return to_play_ == Color::Black ? black_must_pass_ : white_must_pass_;
-}
-
 void Board::apply_move(Point p) {
   grid_[index(p)] = to_play_;
 
@@ -185,14 +188,13 @@ void Board::apply_move(Point p) {
     white_captures_ += total_captured;
 
   ko_point_.reset();
-  if (total_captured == 1 && group_size(p) == 1 && group_liberties(p) == 1) {
+  if (phase_ != Phase::Bonus && total_captured == 1 && group_size(p) == 1 &&
+      group_liberties(p) == 1) {
     ko_point_ = last_captured;
   }
 }
 
-bool Board::game_over() const {
-  return consecutive_passes_ >= 2 && phase_ == Phase::First;
-}
+bool Board::game_over() const { return consecutive_passes_ >= 2; }
 
 ScoreResult Board::score(double komi) const {
   int black_stones = 0, white_stones = 0;
@@ -259,45 +261,37 @@ ScoreResult Board::score(double komi) const {
 }
 
 bool Board::apply(Action a) {
-  if (game_over()) return false;
+  if (game_over())
+    return false;
 
   switch (a.type) {
   case ActionType::Pass:
     if (phase_ == Phase::Second) {
-      // Pass on second sub-action = single move, no penalty
-      phase_ = Phase::First;
-      to_play_ = opponent(to_play_);
       consecutive_passes_ = 0;
-      // Ko from first stone preserved
-      return true;
-    }
-    // Pass on first sub-action
-    ko_point_.reset();
-    if (must_pass()) {
-      if (to_play_ == Color::Black) black_must_pass_ = false;
-      else white_must_pass_ = false;
-      to_play_ = opponent(to_play_);
-      consecutive_passes_ = 0;
+      // Keep ko from Phase 1
     } else {
-      to_play_ = opponent(to_play_);
-      consecutive_passes_++;
+      ++consecutive_passes_;
+      // Reset ko
+      ko_point_.reset();
     }
+    phase_ = Phase::First;
+    to_play_ = opponent(to_play_);
     return true;
 
   case ActionType::Place:
-    if (must_pass()) return false;
-    if (!is_legal(a.point)) return false;
+    if (!is_legal(a.point)) {
+      return false;
+    }
     apply_move(a.point);
-    if (phase_ == Phase::First) {
-      phase_ = Phase::Second;
-      consecutive_passes_ = 0;
-    } else {
-      // Double move complete — penalty
-      if (to_play_ == Color::Black) black_must_pass_ = true;
-      else white_must_pass_ = true;
+    consecutive_passes_ = 0;
+    if (phase_ == Phase::Bonus) {
       phase_ = Phase::First;
+    } else if (phase_ == Phase::First) {
+      phase_ = Phase::Second;
+    } else {
+      // phase_ == Phase::Second
+      phase_ = Phase::Bonus; // Opponent gets bonus move
       to_play_ = opponent(to_play_);
-      consecutive_passes_ = 0;
     }
     return true;
   }
@@ -306,10 +300,6 @@ bool Board::apply(Action a) {
 
 std::vector<Action> Board::legal_actions() const {
   std::vector<Action> actions;
-  if (must_pass()) {
-    actions.push_back(Action::pass());
-    return actions;
-  }
   actions.push_back(Action::pass());
   for (int r = 0; r < size_; r++)
     for (int c = 0; c < size_; c++)
@@ -318,9 +308,15 @@ std::vector<Action> Board::legal_actions() const {
   return actions;
 }
 
-bool Board::play(Point p) {
-  if (!apply(Action::place(p))) return false;
-  apply(Action::pass()); // complete as single move
+bool Board::play_single(Point p) {
+  if (phase_ != Phase::First) {
+    return false;
+  }
+  if (!is_legal(p)) {
+    return false;
+  }
+  apply(Action::place(p));
+  pass();
   return true;
 }
 

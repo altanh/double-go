@@ -14,10 +14,6 @@ find_package(Torch REQUIRED)
 add_library(double-go-lib STATIC src/board.cpp src/bot.cpp)
 target_include_directories(double-go-lib PUBLIC include)
 
-# Executable
-add_executable(double-go src/main.cpp)
-target_link_libraries(double-go PRIVATE double-go-lib)
-
 # GUI (requires SDL2)
 find_package(SDL2 REQUIRED)
 

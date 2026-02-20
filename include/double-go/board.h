@@ -8,59 +8,59 @@
 namespace double_go {
 
 struct ScoreResult {
-    int black_territory;
-    int white_territory;
-    int black_stones;
-    int white_stones;
-    double black_score;
-    double white_score;
+  int black_territory;
+  int white_territory;
+  int black_stones;
+  int white_stones;
+  double black_score;
+  double white_score;
 };
 
 class Board {
-  public:
-    explicit Board(int size = 19);
+public:
+  explicit Board(int size = 19);
 
-    int size() const { return size_; }
-    Color at(Point p) const { return grid_[index(p)]; }
-    Color to_play() const { return to_play_; }
-    std::optional<Point> ko_point() const { return ko_point_; }
-    int captures(Color c) const;
-    Phase phase() const { return phase_; }
-    bool must_pass() const;
-    bool game_over() const;
-    int consecutive_passes() const { return consecutive_passes_; }
-    ScoreResult score(double komi = 6.5) const;
+  int size() const { return size_; }
+  Color at(Point p) const { return grid_[index(p)]; }
+  Color to_play() const { return to_play_; }
+  std::optional<Point> ko_point() const { return ko_point_; }
+  int captures(Color c) const;
+  Phase phase() const { return phase_; }
+  bool has_bonus_move() const { return phase_ == Phase::Bonus; }
+  bool game_over() const;
+  int consecutive_passes() const { return consecutive_passes_; }
+  ScoreResult score(double komi = 6.5) const;
 
-    bool is_on_board(Point p) const;
-    bool is_legal(Point p) const;
-    std::vector<Point> legal_moves() const;
-    std::vector<Action> legal_actions() const;
+  bool is_on_board(Point p) const;
+  bool is_legal(Point p) const;
+  std::vector<Point> legal_moves() const;
+  std::vector<Action> legal_actions() const;
 
-    bool apply(Action a);
-    bool play(Point p);
-    void pass();
+  bool apply(Action a);
+  // Plays a single move and ends turn, if currently in the First phase.
+  // Otherwise, the move is not played. Returns true if a legal move was played.
+  bool play_single(Point p);
+  void pass();
 
-  private:
-    int index(Point p) const { return p.row * size_ + p.col; }
-    Point point(int idx) const { return {idx / size_, idx % size_}; }
+private:
+  int index(Point p) const { return p.row * size_ + p.col; }
+  Point point(int idx) const { return {idx / size_, idx % size_}; }
 
-    void neighbors(Point p, Point out[], int& count) const;
-    int group_liberties(Point p) const;
-    int group_size(Point p) const;
-    void remove_group(Point p);
-    void flood(Point p, Color color, std::vector<bool>& visited,
-               int& lib_count) const;
-    void apply_move(Point p);
-    int size_;
-    std::vector<Color> grid_;
-    Color to_play_ = Color::Black;
-    std::optional<Point> ko_point_;
-    int black_captures_ = 0;
-    int white_captures_ = 0;
-    Phase phase_ = Phase::First;
-    bool black_must_pass_ = false;
-    bool white_must_pass_ = false;
-    int consecutive_passes_ = 0;
+  void neighbors(Point p, Point out[], int &count) const;
+  int group_liberties(Point p) const;
+  int group_size(Point p) const;
+  void remove_group(Point p);
+  void flood(Point p, Color color, std::vector<bool> &visited,
+             int &lib_count) const;
+  void apply_move(Point p);
+  int size_;
+  std::vector<Color> grid_;
+  Color to_play_ = Color::Black;
+  std::optional<Point> ko_point_;
+  int black_captures_ = 0;
+  int white_captures_ = 0;
+  Phase phase_ = Phase::First;
+  int consecutive_passes_ = 0;
 };
 
 } // namespace double_go

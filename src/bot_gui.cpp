@@ -92,11 +92,10 @@ int main(int /*argc*/, char * /*argv*/[]) {
         board.apply(action);
         if (action.type == double_go::ActionType::Place) {
           last_move = action.point;
-          last_move_time = now;
         } else {
           last_move = std::nullopt;
-          last_move_time = now + move_delay_ms / 2;
         }
+        last_move_time = now;
       }
     }
 

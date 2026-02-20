@@ -378,8 +378,7 @@ void render_board(SDL_Renderer *renderer, const double_go::Board &board,
 
   // Hover preview (semi-transparent stone)
   if (!board.game_over() && hover &&
-      board.at(*hover) == double_go::Color::Empty && !board.must_pass() &&
-      board.is_legal(*hover)) {
+      board.at(*hover) == double_go::Color::Empty && board.is_legal(*hover)) {
     int cx = board_x(hover->col);
     int cy = board_y(hover->row);
     if (board.to_play() == double_go::Color::Black) {
@@ -446,13 +445,7 @@ void render_board(SDL_Renderer *renderer, const double_go::Board &board,
     const char *player =
         board.to_play() == double_go::Color::Black ? "BLACK" : "WHITE";
 
-    if (board.must_pass()) {
-      status = std::string(player) + " MUST PASS (P)";
-    } else if (board.phase() == double_go::Phase::Second) {
-      status = std::string(player) + " place 2nd stone or P:end turn";
-    } else {
-      status = std::string(player) + " to play";
-    }
+    status = std::string(player) + " to play";
 
     std::string caps =
         " | B:" + std::to_string(board.captures(double_go::Color::Black)) +
