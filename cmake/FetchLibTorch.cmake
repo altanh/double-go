@@ -1,0 +1,32 @@
+set(LIBTORCH_VERSION "2.10.0")
+
+# Build download URL based on platform
+if(APPLE)
+  execute_process(COMMAND uname -m OUTPUT_VARIABLE _arch OUTPUT_STRIP_TRAILING_WHITESPACE)
+  if(_arch STREQUAL "arm64")
+    set(_libtorch_url "https://download.pytorch.org/libtorch/cpu/libtorch-macos-arm64-${LIBTORCH_VERSION}.zip")
+  else()
+    message(FATAL_ERROR "Unsupported macOS architecture: ${_arch}")
+  endif()
+elseif(UNIX)
+  set(_libtorch_url "https://download.pytorch.org/libtorch/cpu/libtorch-cxx11-abi-shared-with-deps-${LIBTORCH_VERSION}%2Bcpu.zip")
+else()
+  message(FATAL_ERROR "Unsupported platform")
+endif()
+
+set(LIBTORCH_DIR "${PROJECT_SOURCE_DIR}/deps/libtorch")
+
+if(NOT EXISTS "${LIBTORCH_DIR}/share/cmake/Torch/TorchConfig.cmake")
+  set(_archive "${PROJECT_SOURCE_DIR}/deps/libtorch.zip")
+  message(STATUS "Downloading LibTorch ${LIBTORCH_VERSION}...")
+  file(DOWNLOAD "${_libtorch_url}" "${_archive}" SHOW_PROGRESS STATUS _dl_status)
+  list(GET _dl_status 0 _dl_code)
+  if(NOT _dl_code EQUAL 0)
+    message(FATAL_ERROR "LibTorch download failed: ${_dl_status}")
+  endif()
+  message(STATUS "Extracting LibTorch...")
+  file(ARCHIVE_EXTRACT INPUT "${_archive}" DESTINATION "${PROJECT_SOURCE_DIR}/deps")
+  file(REMOVE "${_archive}")
+endif()
+
+list(APPEND CMAKE_PREFIX_PATH "${LIBTORCH_DIR}")

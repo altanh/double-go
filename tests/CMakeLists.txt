@@ -11,3 +11,7 @@ target_link_libraries(tests PRIVATE double-go-lib GTest::gtest_main)
 
 include(GoogleTest)
 gtest_discover_tests(tests)
+
+add_executable(torch-smoke-test torch_smoke_test.cpp)
+target_link_libraries(torch-smoke-test PRIVATE "${TORCH_LIBRARIES}" GTest::gtest_main)
+gtest_discover_tests(torch-smoke-test)

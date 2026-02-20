@@ -9,9 +9,9 @@ int main(int /*argc*/, char * /*argv*/[]) {
     return 1;
   }
 
-  SDL_Window *window = SDL_CreateWindow(
-      "Double Go - Bot vs Bot", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED,
-      WIN_W, WIN_H, SDL_WINDOW_SHOWN);
+  SDL_Window *window =
+      SDL_CreateWindow("Double Go - Bot vs Bot", SDL_WINDOWPOS_CENTERED,
+                       SDL_WINDOWPOS_CENTERED, WIN_W, WIN_H, SDL_WINDOW_SHOWN);
   if (!window) {
     SDL_Log("SDL_CreateWindow failed: %s", SDL_GetError());
     SDL_Quit();
@@ -87,15 +87,16 @@ int main(int /*argc*/, char * /*argv*/[]) {
       Uint32 now = SDL_GetTicks();
       if (now - last_move_time >= move_delay_ms) {
         auto &bot = (board.to_play() == double_go::Color::Black) ? black_bot
-                                                                  : white_bot;
+                                                                 : white_bot;
         auto action = bot.pick_action(board);
         board.apply(action);
         if (action.type == double_go::ActionType::Place) {
           last_move = action.point;
+          last_move_time = now;
         } else {
           last_move = std::nullopt;
+          last_move_time = now + move_delay_ms / 2;
         }
-        last_move_time = now;
       }
     }
 

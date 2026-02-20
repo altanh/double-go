@@ -6,6 +6,10 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
+# LibTorch
+include(cmake/FetchLibTorch.cmake)
+find_package(Torch REQUIRED)
+
 # Main library (no SDL)
 add_library(double-go-lib STATIC src/board.cpp src/bot.cpp)
 target_include_directories(double-go-lib PUBLIC include)
