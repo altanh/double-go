@@ -6,7 +6,7 @@ FetchContent_Declare(
 )
 FetchContent_MakeAvailable(googletest)
 
-add_executable(tests main_test.cpp)
+add_executable(tests main_test.cpp zobrist_test.cpp)
 target_link_libraries(tests PRIVATE double-go-lib GTest::gtest_main)
 
 include(GoogleTest)

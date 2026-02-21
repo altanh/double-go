@@ -2,7 +2,11 @@
 
 #include "types.h"
 
+#include <array>
+#include <cstdint>
+#include <cstring>
 #include <optional>
+#include <random>
 #include <vector>
 
 namespace double_go {
@@ -42,6 +46,8 @@ public:
   bool play_single(Point p);
   void pass();
 
+  uint64_t hash() const { return hash_; }
+
 private:
   int index(Point p) const { return p.row * size_ + p.col; }
   Point point(int idx) const { return {idx / size_, idx % size_}; }
@@ -53,6 +59,10 @@ private:
   void flood(Point p, Color color, std::vector<bool> &visited,
              int &lib_count) const;
   void apply_move(Point p);
+  void clear_ko();
+  void set_ko(Point p);
+  void flip_player();
+  void set_phase(Phase phase);
   int size_;
   std::vector<Color> grid_;
   Color to_play_ = Color::Black;
@@ -61,6 +71,53 @@ private:
   int white_captures_ = 0;
   Phase phase_ = Phase::First;
   int consecutive_passes_ = 0;
+
+  uint64_t hash_;
+};
+
+class ZobristHash {
+  // 0: black, 1: white, 2: ko point
+  std::array<uint64_t, 19 * 19 * 3> stones_;
+  std::array<uint64_t, 3> phases_;
+  uint64_t black_move_;
+
+public:
+  static ZobristHash &get_instance() {
+    static ZobristHash instance;
+    return instance;
+  }
+
+  uint64_t stone(Color c, Point p) const {
+    uint64_t offset = c == Color::Black ? 0 : 1;
+    return stones_[offset * 19 * 19 + p.row * 19 + p.col];
+  }
+
+  uint64_t ko(Point p) const {
+    return stones_[2 * 19 * 19 + p.row * 19 + p.col];
+  }
+
+  uint64_t black_move() const { return black_move_; }
+
+  uint64_t phase(Phase phase) const {
+    return phases_[static_cast<size_t>(phase)];
+  }
+
+private:
+  static std::seed_seq seed(const char *str) {
+    return std::seed_seq(str, str + std::strlen(str));
+  }
+
+  ZobristHash() {
+    std::seed_seq s = seed("the quick brown fox jumps over the lazy dog");
+    std::mt19937_64 rng(s);
+    for (int i = 0; i < stones_.size(); ++i) {
+      stones_[i] = rng();
+    }
+    for (int i = 0; i < phases_.size(); ++i) {
+      phases_[i] = rng();
+    }
+    black_move_ = rng();
+  }
 };
 
 } // namespace double_go

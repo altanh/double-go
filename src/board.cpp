@@ -5,7 +5,13 @@
 
 namespace double_go {
 
-Board::Board(int size) : size_(size), grid_(size * size, Color::Empty) {}
+Board::Board(int size) : size_(size), grid_(size * size, Color::Empty) {
+  ZobristHash &z = ZobristHash::get_instance();
+  assert(size > 0);
+  assert(size <= 19);
+  hash_ = z.black_move();
+  set_phase(Phase::First);
+}
 
 int Board::captures(Color c) const {
   return c == Color::Black ? black_captures_ : white_captures_;
@@ -88,6 +94,7 @@ int Board::group_size(Point p) const {
 }
 
 void Board::remove_group(Point p) {
+  ZobristHash &z = ZobristHash::get_instance();
   Color color = grid_[index(p)];
   if (color == Color::Empty)
     return;
@@ -95,6 +102,7 @@ void Board::remove_group(Point p) {
   std::vector<Point> stack;
   stack.push_back(p);
   grid_[index(p)] = Color::Empty;
+  hash_ ^= z.stone(color, p);
   while (!stack.empty()) {
     Point cur = stack.back();
     stack.pop_back();
@@ -106,6 +114,7 @@ void Board::remove_group(Point p) {
       int ni = index(nbrs[i]);
       if (grid_[ni] == color) {
         grid_[ni] = Color::Empty;
+        hash_ ^= z.stone(color, nbrs[i]);
         stack.push_back(nbrs[i]);
       }
     }
@@ -163,7 +172,10 @@ std::vector<Point> Board::legal_moves() const {
 }
 
 void Board::apply_move(Point p) {
+  ZobristHash &z = ZobristHash::get_instance();
+
   grid_[index(p)] = to_play_;
+  hash_ ^= z.stone(to_play_, p);
 
   Color opp = opponent(to_play_);
   int total_captured = 0;
@@ -187,11 +199,42 @@ void Board::apply_move(Point p) {
   else
     white_captures_ += total_captured;
 
-  ko_point_.reset();
+  clear_ko();
+
   if (phase_ != Phase::Bonus && total_captured == 1 && group_size(p) == 1 &&
       group_liberties(p) == 1) {
-    ko_point_ = last_captured;
+    set_ko(last_captured);
   }
+}
+
+void Board::clear_ko() {
+  ZobristHash &z = ZobristHash::get_instance();
+  if (ko_point_) {
+    hash_ ^= z.ko(*ko_point_);
+  }
+  ko_point_.reset();
+}
+
+void Board::set_ko(Point p) {
+  ZobristHash &z = ZobristHash::get_instance();
+  if (ko_point_) {
+    hash_ ^= z.ko(*ko_point_);
+  }
+  hash_ ^= z.ko(p);
+  ko_point_ = p;
+}
+
+void Board::flip_player() {
+  ZobristHash &z = ZobristHash::get_instance();
+  hash_ ^= z.black_move();
+  to_play_ = opponent(to_play_);
+}
+
+void Board::set_phase(Phase phase) {
+  ZobristHash &z = ZobristHash::get_instance();
+  hash_ ^= z.phase(phase_);
+  hash_ ^= z.phase(phase);
+  phase_ = phase;
 }
 
 bool Board::game_over() const { return consecutive_passes_ >= 2; }
@@ -272,10 +315,10 @@ bool Board::apply(Action a) {
     } else {
       ++consecutive_passes_;
       // Reset ko
-      ko_point_.reset();
+      clear_ko();
     }
-    phase_ = Phase::First;
-    to_play_ = opponent(to_play_);
+    set_phase(Phase::First);
+    flip_player();
     return true;
 
   case ActionType::Place:
@@ -285,13 +328,13 @@ bool Board::apply(Action a) {
     apply_move(a.point);
     consecutive_passes_ = 0;
     if (phase_ == Phase::Bonus) {
-      phase_ = Phase::First;
+      set_phase(Phase::First);
     } else if (phase_ == Phase::First) {
-      phase_ = Phase::Second;
+      set_phase(Phase::Second);
     } else {
       // phase_ == Phase::Second
-      phase_ = Phase::Bonus; // Opponent gets bonus move
-      to_play_ = opponent(to_play_);
+      set_phase(Phase::Bonus); // Opponent gets bonus move
+      flip_player();
     }
     return true;
   }
