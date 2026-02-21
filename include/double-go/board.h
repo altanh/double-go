@@ -48,6 +48,8 @@ public:
 
   uint64_t hash() const { return hash_; }
 
+  Color at_index(int i) const { return grid_[i]; }
+
 private:
   int index(Point p) const { return p.row * size_ + p.col; }
   Point point(int idx) const { return {idx / size_, idx % size_}; }

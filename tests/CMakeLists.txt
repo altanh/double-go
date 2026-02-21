@@ -15,3 +15,7 @@ gtest_discover_tests(tests)
 add_executable(torch-smoke-test torch_smoke_test.cpp)
 target_link_libraries(torch-smoke-test PRIVATE "${TORCH_LIBRARIES}" GTest::gtest_main)
 gtest_discover_tests(torch-smoke-test)
+
+add_executable(model-test model_test.cpp ../src/model.cpp)
+target_link_libraries(model-test PRIVATE double-go-lib "${TORCH_LIBRARIES}" GTest::gtest_main)
+gtest_discover_tests(model-test)
